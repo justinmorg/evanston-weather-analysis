@@ -38,6 +38,23 @@
     border:1px solid var(--line);border-radius:10px;
     padding:14px 16px 12px;
   }
+  .panelHead{display:flex;align-items:flex-start;gap:10px}
+  .panelHead h1{flex:1;min-width:0}
+  #minBtn{
+    flex:none;width:26px;height:26px;padding:0;margin-top:2px;
+    font-size:14px;line-height:1;color:var(--dim);
+    background:none;border:1px solid var(--line);border-radius:6px;cursor:pointer;
+  }
+  #minBtn:hover{color:var(--ink);border-color:var(--dim)}
+  #minBtn:focus-visible{outline:2px solid var(--thunder);outline-offset:2px}
+  /* minimized: shrink to a compact title pill; status dot stays visible */
+  .panel.min{width:auto;max-width:230px;padding:8px 12px}
+  .panel.min .panelBody{display:none}
+  .panel.min h1{font-size:16px}
+  .panel.min h1 small{display:none}
+  .panel.min #minBtn{margin-top:-2px}
+  .panel.min .headDot{display:inline-block}
+  .headDot{display:none;width:8px;height:8px;border-radius:50%;flex:none;align-self:center}
   h1{
     font-family:"Big Shoulders Display",sans-serif;
     font-weight:800;font-size:30px;line-height:.95;
@@ -102,8 +119,13 @@
 <div id="map" aria-label="Lightning map centered on Evanston, Illinois"></div>
 <canvas id="fx"></canvas>
 
-<div class="panel">
-  <h1>Evanston Lightning<small>strikes &amp; thunder fronts</small></h1>
+<div class="panel" id="panel">
+  <div class="panelHead">
+    <span class="headDot dot" id="dotMini" aria-hidden="true"></span>
+    <h1>Evanston Lightning<small>strikes &amp; thunder fronts</small></h1>
+    <button id="minBtn" aria-expanded="true" aria-controls="panelBody" title="Minimize panel">–</button>
+  </div>
+  <div class="panelBody" id="panelBody">
   <div class="status"><span class="dot" id="dot"></span><span id="statusText">connecting to Blitzortung…</span></div>
   <div class="stats">
     <div class="stat"><b id="nView">0</b><span>strikes in view · 10 min</span></div>
@@ -122,6 +144,7 @@
     <button id="homeBtn">Recenter</button>
   </div>
   <div class="credit">Live data: <a href="https://www.blitzortung.org" target="_blank" rel="noopener">Blitzortung.org</a> volunteer network</div>
+  </div><!-- /panelBody -->
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -235,6 +258,18 @@ simBtn.onclick = () => {
 };
 document.getElementById("homeBtn").onclick = () => map.setView(HOME, 10);
 
+/* ---- panel minimize / re-enlarge ---- */
+const panel = document.getElementById("panel"), minBtn = document.getElementById("minBtn");
+function setMin(min){
+  panel.classList.toggle("min", min);
+  minBtn.textContent = min ? "+" : "–";
+  minBtn.title = min ? "Expand panel" : "Minimize panel";
+  minBtn.setAttribute("aria-expanded", !min);
+  try { localStorage.setItem("panelMin", min ? "1" : "0"); } catch(e){}
+}
+minBtn.onclick = () => setMin(!panel.classList.contains("min"));
+try { if (localStorage.getItem("panelMin") === "1") setMin(true); } catch(e){}
+
 /* ============================== rendering ============================== */
 const cv = document.getElementById("fx"), cx = cv.getContext("2d");
 function resize(){
@@ -333,8 +368,9 @@ requestAnimationFrame(frame);
 
 /* ============================== status ============================== */
 function setStatus(kind, text){
-  const d = document.getElementById("dot");
-  d.className = "dot" + (kind === "live" ? " live" : kind === "off" ? " off" : "");
+  const cls = "dot" + (kind === "live" ? " live" : kind === "off" ? " off" : "");
+  document.getElementById("dot").className = cls;
+  document.getElementById("dotMini").className = "headDot " + cls;
   document.getElementById("statusText").textContent = text;
 }
 // note quiet feeds: if connected but nothing received for a while, say so
