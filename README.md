@@ -49,6 +49,18 @@ Lake Michigan's cooling — also lean strongly toward underestimation. Together
 these traits explain only ~15% of the band's error variance, so the effect is
 real but partial; most of the day-to-day error is unmodeled noise.
 
+## Live lightning map
+
+`lightning/index.html` is a self-contained webpage (open it in any browser, or
+serve via GitHub Pages) that plots real-time lightning strikes from the
+[Blitzortung.org](https://www.blitzortung.org) volunteer detection network on a
+dark map centered on the Dempster & Forest home point. Each strike spawns a
+ring expanding at the speed of sound (343 m/s) that fades out near ~20 km,
+the practical limit of audible thunder, and the panel counts down the seconds
+until the nearest thunder front reaches home. A **Simulate storm** toggle
+generates a synthetic cell drifting NE over Lake Michigan for quiet-sky days.
+No API key or build step required.
+
 ## Definitions
 
 - **Sunny day:** >= 10 hours of bright sunshine

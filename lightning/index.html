@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Evanston Lightning — live strikes &amp; thunder fronts</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@500;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --sky:#0b0e14;        /* night-storm ground */
+    --panel:#121724e6;    /* instrument panel */
+    --line:#232c40;
+    --ink:#dfe6f2;
+    --dim:#7b87a0;
+    --bolt:#ffd54d;       /* fresh strike */
+    --ember:#ff5d3a;      /* aging strike */
+    --thunder:#6fa8ff;    /* sound front */
+    --live:#57e389;
+    --warn:#ffb454;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:var(--sky); color:var(--ink);
+    font-family:"IBM Plex Mono",ui-monospace,monospace;
+    font-size:13px; overflow:hidden;
+  }
+  #map{position:fixed;inset:0;background:var(--sky)}
+  #fx{position:fixed;inset:0;pointer-events:none;z-index:600}
+
+  /* ---------- panel ---------- */
+  .panel{
+    position:fixed;top:14px;left:14px;z-index:900;width:288px;
+    background:var(--panel);backdrop-filter:blur(8px);
+    border:1px solid var(--line);border-radius:10px;
+    padding:14px 16px 12px;
+  }
+  h1{
+    font-family:"Big Shoulders Display",sans-serif;
+    font-weight:800;font-size:30px;line-height:.95;
+    letter-spacing:.02em;text-transform:uppercase;
+  }
+  h1 small{display:block;font-weight:500;font-size:12px;letter-spacing:.28em;color:var(--dim);margin-top:4px}
+  .status{display:flex;align-items:center;gap:8px;margin:12px 0 2px;color:var(--dim)}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--warn);flex:none}
+  .dot.live{background:var(--live);box-shadow:0 0 8px var(--live)}
+  .dot.off{background:var(--ember)}
+  .stats{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+  .stat{border:1px solid var(--line);border-radius:8px;padding:8px 10px 6px}
+  .stat b{
+    display:block;font-family:"Big Shoulders Display",sans-serif;
+    font-weight:700;font-size:26px;line-height:1;color:var(--bolt);
+  }
+  .stat span{font-size:10px;letter-spacing:.14em;color:var(--dim);text-transform:uppercase}
+
+  /* thunder-at-home readout — the signature */
+  .home{
+    margin-top:10px;border:1px solid var(--line);border-radius:8px;
+    padding:9px 10px 8px;border-left:3px solid var(--thunder);
+  }
+  .home .label{font-size:10px;letter-spacing:.14em;color:var(--dim);text-transform:uppercase}
+  .home b{
+    display:block;font-family:"Big Shoulders Display",sans-serif;
+    font-weight:700;font-size:24px;line-height:1.05;color:var(--thunder);margin-top:2px;
+  }
+  .home.boom{border-left-color:var(--bolt)}
+  .home.boom b{color:var(--bolt)}
+
+  .legend{margin-top:10px;color:var(--dim);font-size:11px;line-height:1.7}
+  .legend i{display:inline-block;vertical-align:-1px;margin-right:6px}
+  .sw{width:9px;height:9px;border-radius:50%}
+  .ring{width:11px;height:11px;border-radius:50%;border:1.5px solid var(--thunder);background:none}
+
+  .buttons{display:flex;gap:8px;margin-top:12px}
+  button{
+    flex:1;font:inherit;font-size:11px;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--ink);background:none;border:1px solid var(--line);border-radius:7px;
+    padding:7px 4px;cursor:pointer;
+  }
+  button:hover{border-color:var(--dim)}
+  button:focus-visible{outline:2px solid var(--thunder);outline-offset:2px}
+  button.on{border-color:var(--bolt);color:var(--bolt)}
+  .credit{margin-top:10px;font-size:10px;color:var(--dim)}
+  .credit a{color:var(--dim)}
+
+  .leaflet-control-attribution{background:#0b0e14cc!important;color:var(--dim)!important;font-size:10px!important}
+  .leaflet-control-attribution a{color:var(--dim)!important}
+  .leaflet-control-zoom a{background:var(--panel)!important;color:var(--ink)!important;border-color:var(--line)!important}
+
+  @media (max-width:560px){
+    .panel{width:calc(100% - 28px)}
+    .stats{grid-template-columns:repeat(3,1fr)}
+    .legend{display:none}
+  }
+  @media (prefers-reduced-motion:reduce){ body{--motion:0} }
+</style>
+</head>
+<body>
+<div id="map" aria-label="Lightning map centered on Evanston, Illinois"></div>
+<canvas id="fx"></canvas>
+
+<div class="panel">
+  <h1>Evanston Lightning<small>strikes &amp; thunder fronts</small></h1>
+  <div class="status"><span class="dot" id="dot"></span><span id="statusText">connecting to Blitzortung…</span></div>
+  <div class="stats">
+    <div class="stat"><b id="nView">0</b><span>strikes in view · 10 min</span></div>
+    <div class="stat"><b id="rate">0</b><span>strikes / min in view</span></div>
+  </div>
+  <div class="home" id="homeBox">
+    <span class="label">Thunder at home · Dempster &amp; Forest</span>
+    <b id="homeEta">quiet</b>
+  </div>
+  <div class="legend">
+    <div><i class="sw" style="background:var(--bolt)"></i>new strike → <i class="sw" style="background:var(--ember)"></i>10 min old</div>
+    <div><i class="ring"></i>sound front expanding at 343 m/s, fades ~20 km out</div>
+  </div>
+  <div class="buttons">
+    <button id="simBtn" aria-pressed="false">Simulate storm</button>
+    <button id="homeBtn">Center home</button>
+  </div>
+  <div class="credit">Live data: <a href="https://www.blitzortung.org" target="_blank" rel="noopener">Blitzortung.org</a> volunteer network</div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+"use strict";
+/* ============================== constants ============================== */
+const HOME = [42.0409, -87.6796];            // Dempster St & Forest Ave
+const SOUND = 343;                            // m/s (~20 C air)
+const AUDIBLE_M = 20000;                      // thunder rarely heard past ~20 km
+const RING_LIFE = AUDIBLE_M / SOUND;          // ~58 s
+const STRIKE_LIFE = 600;                      // keep strikes 10 min
+const MAX_STRIKES = 6000;
+const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/* ============================== map ============================== */
+const map = L.map("map", { zoomControl: true, worldCopyJump: true })
+  .setView(HOME, 9);
+L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
+  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',
+  subdomains: "abcd", maxZoom: 19
+}).addTo(map);
+
+// home marker
+L.circleMarker(HOME, { radius: 5, color: "#6fa8ff", weight: 2, fillColor: "#0b0e14", fillOpacity: 1 })
+  .addTo(map).bindTooltip("HOME", { permanent: false, direction: "top" });
+
+/* ============================== state ============================== */
+const strikes = [];      // {t: epoch ms, lat, lon}
+let recvCount = 0, sim = false, simTimer = null, ws = null, wsIdx = 0, alive = false;
+
+/* ============================== blitzortung feed ==============================
+   Public WebSocket mirrors stream every detected strike worldwide, LZW-packed.
+   Handshake: send {"a":111}; each message decodes to JSON with time (ns), lat, lon. */
+const SERVERS = ["wss://ws1.blitzortung.org", "wss://ws7.blitzortung.org", "wss://ws8.blitzortung.org"];
+
+function lzwDecode(s){
+  const dict = {}, data = String(s).split("");
+  let cur = data[0], old = cur, code = 256, phrase;
+  const out = [cur];
+  for (let i = 1; i < data.length; i++){
+    const c = data[i].charCodeAt(0);
+    phrase = c < 256 ? data[i] : (dict[c] ? dict[c] : old + cur);
+    out.push(phrase);
+    cur = phrase.charAt(0);
+    dict[code++] = old + cur;
+    old = phrase;
+  }
+  return out.join("");
+}
+
+function connect(){
+  if (sim) return;
+  setStatus("warn", "connecting to Blitzortung…");
+  try { ws = new WebSocket(SERVERS[wsIdx % SERVERS.length]); }
+  catch(e){ retry(); return; }
+  ws.onopen = () => { ws.send('{"a":111}'); alive = true; setStatus("live", "live · Blitzortung network"); };
+  ws.onmessage = (ev) => {
+    try {
+      const d = JSON.parse(lzwDecode(ev.data));
+      if (typeof d.lat !== "number" || typeof d.lon !== "number") return;
+      // feed time is ns since epoch; trust local clock if skewed
+      let t = d.time ? d.time / 1e6 : Date.now();
+      if (Math.abs(t - Date.now()) > 120000) t = Date.now();
+      addStrike(t, d.lat, d.lon);
+      recvCount++;
+    } catch(e){ /* ignore malformed frames */ }
+  };
+  ws.onclose = ws.onerror = () => { if (alive || !sim) retry(); };
+}
+function retry(){
+  alive = false;
+  if (sim) return;
+  setStatus("off", "reconnecting…");
+  try { ws && ws.close(); } catch(e){}
+  wsIdx++;
+  setTimeout(connect, 2500);
+}
+
+function addStrike(t, lat, lon){
+  strikes.push({ t, lat, lon });
+  if (strikes.length > MAX_STRIKES) strikes.splice(0, strikes.length - MAX_STRIKES);
+}
+
+/* ============================== simulation ============================== */
+// A synthetic cell drifting NE over Lake Michigan — for quiet-sky days.
+const simBtn = document.getElementById("simBtn");
+simBtn.onclick = () => {
+  sim = !sim;
+  simBtn.classList.toggle("on", sim);
+  simBtn.setAttribute("aria-pressed", sim);
+  if (sim){
+    try { ws && ws.close(); } catch(e){}
+    alive = false;
+    setStatus("warn", "simulation · synthetic storm cell");
+    let cLat = 42.02, cLon = -87.92;
+    simTimer = setInterval(() => {
+      cLat += 0.0016; cLon += 0.0028;                    // NE drift ~40 km/h
+      if (cLon > -87.2){ cLat = 41.95; cLon = -88.05; }  // recycle cell
+      const n = Math.random() < 0.35 ? 2 : 1;
+      for (let i = 0; i < n; i++){
+        addStrike(Date.now(),
+          cLat + (Math.random() - .5) * 0.12,
+          cLon + (Math.random() - .5) * 0.12);
+        recvCount++;
+      }
+    }, 900);
+  } else {
+    clearInterval(simTimer);
+    connect();
+  }
+};
+document.getElementById("homeBtn").onclick = () => map.setView(HOME, 10);
+
+/* ============================== rendering ============================== */
+const cv = document.getElementById("fx"), cx = cv.getContext("2d");
+function resize(){
+  cv.width = innerWidth * devicePixelRatio; cv.height = innerHeight * devicePixelRatio;
+  cv.style.width = innerWidth + "px"; cv.style.height = innerHeight + "px";
+  cx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+}
+addEventListener("resize", resize); resize();
+
+function metersToPx(m, lat){
+  const mpp = 40075016.686 * Math.cos(lat * Math.PI / 180) / Math.pow(2, map.getZoom() + 8);
+  return m / mpp;
+}
+function distM(aLat, aLon, bLat, bLon){
+  const R = 6371000, p = Math.PI / 180;
+  const dLat = (bLat - aLat) * p, dLon = (bLon - aLon) * p;
+  const h = Math.sin(dLat/2)**2 + Math.cos(aLat*p) * Math.cos(bLat*p) * Math.sin(dLon/2)**2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+function lerpColor(a, b, k){
+  return `rgb(${a.map((v,i)=>Math.round(v+(b[i]-v)*k)).join(",")})`;
+}
+const C_BOLT = [255,213,77], C_EMBER = [255,93,58], C_FADE = [90,50,60];
+
+function frame(){
+  const now = Date.now();
+  // prune old strikes
+  while (strikes.length && now - strikes[0].t > STRIKE_LIFE * 1000) strikes.shift();
+
+  cx.clearRect(0, 0, innerWidth, innerHeight);
+  const b = map.getBounds().pad(0.3);
+  let inView = 0, inViewMin = 0, nextEta = Infinity, boom = false;
+
+  for (const s of strikes){
+    const age = (now - s.t) / 1000;
+    if (!b.contains([s.lat, s.lon])) { continue; }
+    inView++;
+    if (age <= 60) inViewMin++;
+    const p = map.latLngToContainerPoint([s.lat, s.lon]);
+
+    /* --- thunder ring: radius = sound speed x age --- */
+    if (age <= RING_LIFE){
+      const rM = SOUND * age;
+      const rPx = metersToPx(rM, s.lat);
+      const fade = 1 - age / RING_LIFE;
+      cx.beginPath();
+      cx.arc(p.x, p.y, rPx, 0, Math.PI * 2);
+      cx.strokeStyle = `rgba(111,168,255,${(0.65 * fade).toFixed(3)})`;
+      cx.lineWidth = Math.max(0.6, 2.2 * fade);
+      cx.stroke();
+
+      // thunder-at-home bookkeeping
+      const dHome = distM(s.lat, s.lon, HOME[0], HOME[1]);
+      if (dHome <= AUDIBLE_M){
+        const eta = s.t + (dHome / SOUND) * 1000;
+        if (eta > now && eta < nextEta) nextEta = eta;
+        if (now - eta >= 0 && now - eta < 2500) boom = true;
+      }
+    }
+
+    /* --- the strike itself --- */
+    const k = Math.min(age / STRIKE_LIFE, 1);
+    const col = k < 0.25 ? lerpColor(C_BOLT, C_EMBER, k / 0.25)
+                         : lerpColor(C_EMBER, C_FADE, (k - 0.25) / 0.75);
+    // brief flash on impact
+    if (age < 0.6 && !reduceMotion){
+      const g = cx.createRadialGradient(p.x, p.y, 0, p.x, p.y, 26 * (1 - age / 0.6) + 6);
+      g.addColorStop(0, "rgba(255,255,255,0.9)");
+      g.addColorStop(1, "rgba(255,213,77,0)");
+      cx.fillStyle = g;
+      cx.beginPath(); cx.arc(p.x, p.y, 32, 0, Math.PI * 2); cx.fill();
+    }
+    cx.beginPath();
+    cx.arc(p.x, p.y, age < 60 ? 3.4 : 2.4, 0, Math.PI * 2);
+    cx.fillStyle = col;
+    cx.globalAlpha = 1 - 0.55 * k;
+    cx.fill();
+    cx.globalAlpha = 1;
+  }
+
+  /* --- panel readouts --- */
+  document.getElementById("nView").textContent = inView;
+  document.getElementById("rate").textContent = inViewMin;
+  const homeBox = document.getElementById("homeBox"), etaEl = document.getElementById("homeEta");
+  if (boom){
+    homeBox.classList.add("boom"); etaEl.textContent = "THUNDER NOW";
+  } else {
+    homeBox.classList.remove("boom");
+    etaEl.textContent = nextEta < Infinity
+      ? "in " + Math.ceil((nextEta - now) / 1000) + " s"
+      : (inView ? "out of earshot" : "quiet");
+  }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+/* ============================== status ============================== */
+function setStatus(kind, text){
+  const d = document.getElementById("dot");
+  d.className = "dot" + (kind === "live" ? " live" : kind === "off" ? " off" : "");
+  document.getElementById("statusText").textContent = text;
+}
+// note quiet feeds: if connected but nothing received for a while, say so
+setInterval(() => {
+  if (alive && recvCount === 0) setStatus("live", "live · waiting for strikes worldwide…");
+}, 8000);
+
+connect();
+</script>
+</body>
+</html>
