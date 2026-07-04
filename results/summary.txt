@@ -1,0 +1,35 @@
+=== EVANSTON SUMMER FORECAST BIAS (day-ahead max temp) ===
+Period: 2021-06-01 to 2025-08-31 (June-August only)
+Days analyzed: 460  (dropped 0 with missing data)
+Sunny days   (>= 10 hrs sunshine): 364
+Mixed days   : 66
+Cloudy days  (<  5 hrs sunshine): 30
+-------------------------------------------------------
+Mean error (actual - forecast; + = underestimated):
+  All days   : +0.47 F  (MAE 2.50 F)
+  Sunny days : +0.66 F  (MAE 2.41 F)
+  Mixed days : -0.11 F
+  Cloudy days: -0.56 F  (MAE 3.72 F)
+Sunny vs cloudy mean error difference: +1.21 F (Welch t = 1.26, p = 0.2169)
+-------------------------------------------------------
+Sunny days underestimated by >= 5 F: 31 of 364 (8.5%)
+Cloudy days underestimated by >= 5 F: 3 of 30 (10.0%)  [baseline]
+-------------------------------------------------------
+Per-year breakdown (summer only):
+      days  mean_error  sunny_days  sunny_mean_error
+year                                                
+2021    92        2.08          69              2.61
+2022    92        0.50          68              0.65
+2023    92        0.19          74              0.32
+2024    92        0.03          75              0.07
+2025    92       -0.46          78             -0.19
+-------------------------------------------------------
+Correlation of error vs sunshine hours (all days): r = +0.133
+
+Top 5 biggest sunny-day underestimations:
+      date  forecast_max  actual_max  error  sunshine_hours
+2021-07-07          72.5        85.9   13.4          11.133
+2021-06-19          78.4        91.5   13.1          13.000
+2021-06-18          79.7        91.6   11.9          11.612
+2024-07-15          79.8        90.2   10.4          12.038
+2023-06-01          74.8        85.2   10.4          14.181

@@ -77,7 +77,10 @@ def fetch_actuals():
 
 
 def fetch_forecasts():
-    print("Fetching day-ahead forecast archive (previous runs)...")
+    # Note: the Previous Runs API does not offer a daily
+    # temperature_2m_max_previous_day1 variable, so we fetch the hourly
+    # day-ahead temperature and take the max per local calendar day.
+    print("Fetching day-ahead forecast archive (previous runs, hourly)...")
     data = get_json(
         "https://previous-runs-api.open-meteo.com/v1/forecast",
         {
@@ -85,21 +88,35 @@ def fetch_forecasts():
             "longitude": LONGITUDE,
             "start_date": START_DATE,
             "end_date": END_DATE,
-            "daily": "temperature_2m_max_previous_day1",
+            "hourly": "temperature_2m_previous_day1",
             "temperature_unit": "fahrenheit",
             "timezone": TIMEZONE,
         },
     )
-    daily = data["daily"]
-    values = daily["temperature_2m_max_previous_day1"]
-    n_missing = sum(1 for v in values if v is None)
+    hourly = data["hourly"]
+    times = hourly["time"]
+    values = hourly["temperature_2m_previous_day1"]
+
+    # Aggregate hourly -> daily max. Only keep days with full (or nearly
+    # full) coverage so a lone stray hour can't masquerade as a daily max.
+    per_day = {}
+    for ts, v in zip(times, values):
+        day = ts[:10]
+        per_day.setdefault(day, []).append(v)
+
+    n_missing = 0
     with open("data/forecasts.csv", "w", newline="") as f:
         w = csv.writer(f)
         w.writerow(["date", "forecast_max"])
-        for date, v in zip(daily["time"], values):
-            w.writerow([date, v if v is not None else ""])
-    print(f"  Saved {len(values)} days -> data/forecasts.csv "
-          f"({n_missing} missing forecast values)")
+        for day in sorted(per_day):
+            vals = [v for v in per_day[day] if v is not None]
+            if len(vals) >= 20:  # require >= 20 of 24 hours present
+                w.writerow([day, round(max(vals), 1)])
+            else:
+                w.writerow([day, ""])
+                n_missing += 1
+    print(f"  Saved {len(per_day)} days -> data/forecasts.csv "
+          f"({n_missing} missing/incomplete forecast days)")
 
 
 if __name__ == "__main__":
