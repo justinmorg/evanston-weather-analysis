@@ -3,7 +3,7 @@
 Does the day-ahead forecast systematically **underestimate the daily high on
 sunny summer days** in Evanston, IL?
 
-Location: Dempster St & Forest Ave area (42.0409, -87.6796). Open-Meteo
+Location: Evanston lakefront reference point (42.0409, -87.6796). Open-Meteo
 interpolates from a ~9 km model grid, so results represent the Evanston
 lakefront generally. Period: summers (June-August) 2021-2025.
 
@@ -54,10 +54,10 @@ real but partial; most of the day-to-day error is unmodeled noise.
 `lightning/index.html` is a self-contained webpage (open it in any browser, or
 serve via GitHub Pages) that plots real-time lightning strikes from the
 [Blitzortung.org](https://www.blitzortung.org) volunteer detection network on a
-dark map centered on the Dempster & Forest home point. Each strike spawns a
-ring expanding at the speed of sound (343 m/s) that fades out near ~20 km,
+dark map centered on an Evanston lakefront reference point. Each strike spawns
+a ring expanding at the speed of sound (343 m/s) that fades out near ~20 km,
 the practical limit of audible thunder, and the panel counts down the seconds
-until the nearest thunder front reaches home. A **Simulate storm** toggle
+until the nearest thunder front reaches that point. A **Simulate storm** toggle
 generates a synthetic cell drifting NE over Lake Michigan for quiet-sky days.
 No API key or build step required.
 

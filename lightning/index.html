@@ -110,7 +110,7 @@
     <div class="stat"><b id="rate">0</b><span>strikes / min in view</span></div>
   </div>
   <div class="home" id="homeBox">
-    <span class="label">Thunder at home · Dempster &amp; Forest</span>
+    <span class="label">Thunder at reference point · Evanston lakefront</span>
     <b id="homeEta">quiet</b>
   </div>
   <div class="legend">
@@ -119,7 +119,7 @@
   </div>
   <div class="buttons">
     <button id="simBtn" aria-pressed="false">Simulate storm</button>
-    <button id="homeBtn">Center home</button>
+    <button id="homeBtn">Recenter</button>
   </div>
   <div class="credit">Live data: <a href="https://www.blitzortung.org" target="_blank" rel="noopener">Blitzortung.org</a> volunteer network</div>
 </div>
@@ -128,7 +128,7 @@
 <script>
 "use strict";
 /* ============================== constants ============================== */
-const HOME = [42.0409, -87.6796];            // Dempster St & Forest Ave
+const HOME = [42.0409, -87.6796];            // Evanston lakefront reference point
 const SOUND = 343;                            // m/s (~20 C air)
 const AUDIBLE_M = 20000;                      // thunder rarely heard past ~20 km
 const RING_LIFE = AUDIBLE_M / SOUND;          // ~58 s
@@ -146,7 +146,7 @@ L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
 
 // home marker
 L.circleMarker(HOME, { radius: 5, color: "#6fa8ff", weight: 2, fillColor: "#0b0e14", fillOpacity: 1 })
-  .addTo(map).bindTooltip("HOME", { permanent: false, direction: "top" });
+  .addTo(map).bindTooltip("REF POINT", { permanent: false, direction: "top" });
 
 /* ============================== state ============================== */
 const strikes = [];      // {t: epoch ms, lat, lon}
