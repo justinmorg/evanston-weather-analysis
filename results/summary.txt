@@ -33,3 +33,17 @@ Top 5 biggest sunny-day underestimations:
 2021-06-18          79.7        91.6   11.9          11.612
 2024-07-15          79.8        90.2   10.4          12.038
 2023-06-01          74.8        85.2   10.4          14.181
+
+=======================================================
+FORECAST-BAND ANALYSIS: forecast in [65, 80) F
+=======================================================
+Days in band: 256
+  Underestimated (actual > forecast): 142 (55.5%)
+  Overestimated  (actual < forecast): 110 (43.0%)
+  Exact                             : 4
+Mean error +0.98 F, median +0.40 F
+Mean miss when UNDER: +3.22 F   when OVER: -1.88 F
+Tail asymmetry (the key signal):
+  underestimated by >= 5 F: 30 days (11.7%)
+  overestimated  by >= 5 F: 5 days (2.0%)
+Signed error sum: under +458 F over 142 days vs over -207 F over 110 days (net +251 F)

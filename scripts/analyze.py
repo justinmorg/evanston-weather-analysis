@@ -23,6 +23,8 @@ import matplotlib.pyplot as plt
 SUNNY_HOURS = 10.0   # >= this many sunshine hours = "sunny"
 CLOUDY_HOURS = 5.0   # <  this many sunshine hours = "cloudy"
 BIG_MISS_F = 5.0     # threshold for a "big underestimation"
+BAND_LO = 65.0       # forecast-band lower bound (inclusive)
+BAND_HI = 80.0       # forecast-band upper bound (exclusive)
 
 
 def load_data():
@@ -128,6 +130,40 @@ def main():
             line(f, top[["date", "forecast_max", "actual_max", "error",
                          "sunshine_hours"]].to_string(index=False))
 
+        # --- Forecast-band analysis (65-80 F) -----------------------------
+        # Pooling errors across all forecast levels can hide a bias that only
+        # appears at a particular forecast range. Condition on the band.
+        line(f, "")
+        line(f, "=" * 55)
+        line(f, f"FORECAST-BAND ANALYSIS: forecast in [{BAND_LO:.0f}, {BAND_HI:.0f}) F")
+        line(f, "=" * 55)
+        band = df[(df["forecast_max"] >= BAND_LO) &
+                  (df["forecast_max"] < BAND_HI)].copy()
+        nb = len(band)
+        under = band[band["error"] > 0]
+        over = band[band["error"] < 0]
+        line(f, f"Days in band: {nb}")
+        line(f, f"  Underestimated (actual > forecast): {len(under)} "
+                f"({100*len(under)/nb:.1f}%)")
+        line(f, f"  Overestimated  (actual < forecast): {len(over)} "
+                f"({100*len(over)/nb:.1f}%)")
+        line(f, f"  Exact                             : "
+                f"{nb - len(under) - len(over)}")
+        line(f, f"Mean error {band['error'].mean():+.2f} F, "
+                f"median {band['error'].median():+.2f} F")
+        line(f, f"Mean miss when UNDER: {under['error'].mean():+.2f} F   "
+                f"when OVER: {over['error'].mean():+.2f} F")
+        line(f, "Tail asymmetry (the key signal):")
+        line(f, f"  underestimated by >= {BIG_MISS_F:.0f} F: "
+                f"{len(band[band['error'] >= BIG_MISS_F])} days "
+                f"({100*len(band[band['error'] >= BIG_MISS_F])/nb:.1f}%)")
+        line(f, f"  overestimated  by >= {BIG_MISS_F:.0f} F: "
+                f"{len(band[band['error'] <= -BIG_MISS_F])} days "
+                f"({100*len(band[band['error'] <= -BIG_MISS_F])/nb:.1f}%)")
+        line(f, f"Signed error sum: under {under['error'].sum():+.0f} F over "
+                f"{len(under)} days vs over {over['error'].sum():+.0f} F over "
+                f"{len(over)} days (net {band['error'].sum():+.0f} F)")
+
     # --- Plots ---
     plt.figure(figsize=(10, 6))
     bins = np.arange(-12, 13, 1)
@@ -181,8 +217,30 @@ def main():
     plt.savefig("results/error_by_year.png", dpi=150)
     plt.close()
 
+    # Signed-error histogram for the forecast band, colored by direction.
+    band = df[(df["forecast_max"] >= BAND_LO) &
+              (df["forecast_max"] < BAND_HI)]
+    plt.figure(figsize=(10, 6))
+    bins = np.arange(-12, 13, 1)
+    plt.hist(band[band["error"] > 0]["error"], bins=bins, color="firebrick",
+             alpha=0.75, edgecolor="black", label="Underestimated")
+    plt.hist(band[band["error"] <= 0]["error"], bins=bins, color="steelblue",
+             alpha=0.75, edgecolor="black", label="Over / exact")
+    plt.axvline(0, color="black", lw=1.5)
+    plt.axvline(band["error"].mean(), color="darkorange", ls=":", lw=2,
+                label=f"Mean {band['error'].mean():+.1f}F")
+    plt.title(f"Forecast Error for Forecasts in [{BAND_LO:.0f},{BAND_HI:.0f})F "
+              f"(Evanston summers 2021-2025, n={len(band)})")
+    plt.xlabel("degrees F underestimated (+) / overestimated (-)")
+    plt.ylabel("Number of days")
+    plt.legend()
+    plt.grid(alpha=0.3)
+    plt.tight_layout()
+    plt.savefig("results/error_band_histogram.png", dpi=150)
+    plt.close()
+
     print("\nPlots saved to results/: error_histogram.png, "
-          "error_vs_sunshine.png, error_by_year.png")
+          "error_vs_sunshine.png, error_by_year.png, error_band_histogram.png")
 
 
 if __name__ == "__main__":

@@ -28,7 +28,11 @@ import requests
 # --- Configuration ---
 LATITUDE = 42.0409       # Dempster St & Forest Ave, Evanston, IL
 LONGITUDE = -87.6796
-START_DATE = "2021-06-01"  # five summers: 2021-2025
+# The Previous Runs (day-ahead forecast) archive has NO data before 2021 --
+# temperature_2m_previous_day1 is empty for 2016-2020 and the API rejects
+# dates before 2016-01-01. So 2021 is the earliest usable start for forecast
+# error analysis, even though ERA5 actuals go back decades.
+START_DATE = "2021-06-01"  # five summers: 2021-2025 (forecast-archive limited)
 END_DATE = "2025-08-31"
 TIMEZONE = "America/Chicago"
 
@@ -119,7 +123,82 @@ def fetch_forecasts():
           f"({n_missing} missing/incomplete forecast days)")
 
 
+def _circ_mean(degs):
+    """Vector-mean of wind directions in degrees (handles the 0/360 wrap)."""
+    import math
+    degs = [d for d in degs if d is not None]
+    if not degs:
+        return ""
+    s = sum(math.sin(math.radians(d)) for d in degs)
+    c = sum(math.cos(math.radians(d)) for d in degs)
+    return round(math.degrees(math.atan2(s, c)) % 360, 1)
+
+
+def fetch_features():
+    """Candidate explanatory features for the error, used by traits.py.
+
+    Daily air-mass descriptors plus afternoon (12-18h local) means of
+    humidity, dewpoint, wind direction and cloud cover. These are all
+    independent of actual_max (so they don't trivially correlate with the
+    error, which is actual_max - forecast_max)."""
+    print("Fetching explanatory features (archive)...")
+    daily = get_json(
+        "https://archive-api.open-meteo.com/v1/archive",
+        {
+            "latitude": LATITUDE, "longitude": LONGITUDE,
+            "start_date": START_DATE, "end_date": END_DATE,
+            "daily": ("temperature_2m_min,wind_speed_10m_max,"
+                      "wind_direction_10m_dominant,precipitation_sum,"
+                      "et0_fao_evapotranspiration"),
+            "temperature_unit": "fahrenheit", "wind_speed_unit": "mph",
+            "timezone": TIMEZONE,
+        },
+    )["daily"]
+    hourly = get_json(
+        "https://archive-api.open-meteo.com/v1/archive",
+        {
+            "latitude": LATITUDE, "longitude": LONGITUDE,
+            "start_date": START_DATE, "end_date": END_DATE,
+            "hourly": ("relative_humidity_2m,dew_point_2m,"
+                       "wind_direction_10m,cloud_cover"),
+            "temperature_unit": "fahrenheit", "timezone": TIMEZONE,
+        },
+    )["hourly"]
+
+    # Aggregate the 12:00-18:00 local window per day.
+    aft = {}
+    for i, ts in enumerate(hourly["time"]):
+        if 12 <= int(ts[11:13]) <= 18:
+            d = aft.setdefault(ts[:10], {"rh": [], "dp": [], "wd": [], "cc": []})
+            d["rh"].append(hourly["relative_humidity_2m"][i])
+            d["dp"].append(hourly["dew_point_2m"][i])
+            d["wd"].append(hourly["wind_direction_10m"][i])
+            d["cc"].append(hourly["cloud_cover"][i])
+
+    def mean(vals):
+        v = [x for x in vals if x is not None]
+        return round(sum(v) / len(v), 1) if v else ""
+
+    with open("data/features.csv", "w", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(["date", "temp_min", "wind_max", "wind_dir_dom",
+                    "precip", "et0", "aft_rh", "aft_dewpt",
+                    "aft_wind_dir", "aft_cloud"])
+        for i, day in enumerate(daily["time"]):
+            a = aft.get(day, {"rh": [], "dp": [], "wd": [], "cc": []})
+            w.writerow([
+                day, daily["temperature_2m_min"][i],
+                daily["wind_speed_10m_max"][i],
+                daily["wind_direction_10m_dominant"][i],
+                daily["precipitation_sum"][i],
+                daily["et0_fao_evapotranspiration"][i],
+                mean(a["rh"]), mean(a["dp"]), _circ_mean(a["wd"]), mean(a["cc"]),
+            ])
+    print(f"  Saved {len(daily['time'])} days -> data/features.csv")
+
+
 if __name__ == "__main__":
     fetch_actuals()
     fetch_forecasts()
-    print("Done. Now run: python scripts/analyze.py")
+    fetch_features()
+    print("Done. Now run: python scripts/analyze.py  then  python scripts/traits.py")

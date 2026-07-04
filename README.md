@@ -18,14 +18,36 @@ lakefront generally. Period: summers (June-August) 2021-2025.
 ## Usage
 
 ```bash
-pip install requests pandas matplotlib
-python scripts/fetch_data.py   # downloads data/actuals.csv, data/forecasts.csv
-python scripts/analyze.py      # writes results/summary.txt and plots
+pip install requests pandas matplotlib scipy
+python scripts/fetch_data.py   # data/actuals.csv, forecasts.csv, features.csv
+python scripts/analyze.py      # results/summary.txt + 4 plots
+python scripts/traits.py       # results/traits.txt + error_vs_humidity.png
 ```
 
 Note: `fetch_data.py` must run from a normal network (Open-Meteo blocks some
 automated environments). Cached CSVs are committed in `data/` so the analysis
 is reproducible without re-fetching.
+
+**Why the window starts in 2021:** the Previous Runs (day-ahead forecast)
+archive has no data before 2021 — `temperature_2m_previous_day1` is empty for
+2016-2020 and the API rejects dates before 2016. ERA5 actuals go back decades,
+but without archived forecasts there is no error to compute, so 2021-2025 is
+the full extent of this analysis.
+
+## Forecast-band and trait findings
+
+Pooling all days hides the pattern; conditioning on the forecast level shows a
+lean toward underestimation for forecasts in **[65, 80) F** (~55% of days
+under, and big misses run ~6:1 in the underestimate direction). See
+`analyze.py`'s band section.
+
+`traits.py` asks what separates the missed-low from missed-high days, using
+only features independent of `actual_max`. The strongest clean separator is
+**afternoon humidity**: dry afternoons underestimate (~+2 F, ~72% of days),
+humid afternoons do not (~-0.2 F). Offshore (westerly) winds — which remove
+Lake Michigan's cooling — also lean strongly toward underestimation. Together
+these traits explain only ~15% of the band's error variance, so the effect is
+real but partial; most of the day-to-day error is unmodeled noise.
 
 ## Definitions
 
