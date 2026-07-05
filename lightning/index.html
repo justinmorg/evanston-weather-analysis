@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Evanston Lightning — live strikes &amp; thunder fronts</title>
+<title>Lightning Live — strikes &amp; thunder fronts</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -116,13 +116,13 @@
 </style>
 </head>
 <body>
-<div id="map" aria-label="Lightning map centered on Evanston, Illinois"></div>
+<div id="map" aria-label="Lightning map centered on your location"></div>
 <canvas id="fx"></canvas>
 
 <div class="panel" id="panel">
   <div class="panelHead">
     <span class="headDot dot" id="dotMini" aria-hidden="true"></span>
-    <h1>Evanston Lightning<small>strikes &amp; thunder fronts</small></h1>
+    <h1>Lightning Live<small>strikes &amp; thunder fronts</small></h1>
     <button id="minBtn" aria-expanded="true" aria-controls="panelBody" title="Minimize panel">–</button>
   </div>
   <div class="panelBody" id="panelBody">
@@ -132,7 +132,7 @@
     <div class="stat"><b id="rate">0</b><span>strikes / min in view</span></div>
   </div>
   <div class="home" id="homeBox">
-    <span class="label">Thunder at reference point · Evanston lakefront</span>
+    <span class="label">Thunder at your location</span>
     <b id="homeEta">quiet</b>
   </div>
   <div class="legend">
@@ -151,7 +151,8 @@
 <script>
 "use strict";
 /* ============================== constants ============================== */
-const HOME = [42.0409, -87.6796];            // Evanston lakefront reference point
+const DEFAULT_VIEW = [39.5, -98.35];         // geographic center of the US — used only until we locate the visitor
+let userLoc = null;                          // [lat, lon] once geolocation resolves; null otherwise
 const SOUND = 343;                            // m/s (~20 C air)
 const AUDIBLE_M = 20000;                      // thunder rarely heard past ~20 km
 const RING_LIFE = AUDIBLE_M / SOUND;          // ~58 s
@@ -161,15 +162,38 @@ const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 /* ============================== map ============================== */
 const map = L.map("map", { zoomControl: true, worldCopyJump: true })
-  .setView(HOME, 9);
+  .setView(DEFAULT_VIEW, 4);
 L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
   attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',
   subdomains: "abcd", maxZoom: 19
 }).addTo(map);
 
-// home marker
-L.circleMarker(HOME, { radius: 5, color: "#6fa8ff", weight: 2, fillColor: "#0b0e14", fillOpacity: 1 })
-  .addTo(map).bindTooltip("REF POINT", { permanent: false, direction: "top" });
+// ---- locate the visitor: center the map + drop a blue "you" dot ----
+let youMarker = null, youHalo = null;
+function placeYou(loc, recenter){
+  userLoc = loc;
+  if (youHalo){ youHalo.setLatLng(loc); youMarker.setLatLng(loc); }
+  else {
+    youHalo = L.circleMarker(loc, { radius: 13, color: "#6fa8ff", weight: 0,
+      fillColor: "#6fa8ff", fillOpacity: 0.18, interactive: false }).addTo(map);
+    youMarker = L.circleMarker(loc, { radius: 6, color: "#cfe0ff", weight: 2,
+      fillColor: "#6fa8ff", fillOpacity: 1 }).addTo(map).bindTooltip("YOU", { direction: "top" });
+  }
+  if (recenter) map.setView(loc, 9);
+}
+function locateUser(recenter){
+  if (!navigator.geolocation){ setLocNote("location unavailable"); return; }
+  navigator.geolocation.getCurrentPosition(
+    pos => placeYou([pos.coords.latitude, pos.coords.longitude], recenter),
+    err => { if (!userLoc) setLocNote(err.code === 1 ? "location off" : "location unavailable"); },
+    { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+  );
+}
+function setLocNote(txt){
+  const el = document.getElementById("homeEta");
+  if (!userLoc) el.textContent = txt;
+}
+locateUser(true);
 
 /* ============================== state ============================== */
 const strikes = [];      // {t: epoch ms, lat, lon}
@@ -229,7 +253,7 @@ function addStrike(t, lat, lon){
 }
 
 /* ============================== simulation ============================== */
-// A synthetic cell drifting NE over Lake Michigan — for quiet-sky days.
+// A synthetic cell that drifts NE through the visitor's own area — for quiet-sky days.
 const simBtn = document.getElementById("simBtn");
 simBtn.onclick = () => {
   sim = !sim;
@@ -239,10 +263,14 @@ simBtn.onclick = () => {
     try { ws && ws.close(); } catch(e){}
     alive = false;
     setStatus("warn", "simulation · synthetic storm cell");
-    let cLat = 42.02, cLon = -87.92;
+    // anchor the cell just SW of the visitor (or the current map center) so it sweeps toward them
+    const anchor = userLoc || [map.getCenter().lat, map.getCenter().lng];
+    if (map.getZoom() < 8) map.setView(anchor, 9);
+    let cLat = anchor[0] - 0.18, cLon = anchor[1] - 0.28;
+    const startLat = cLat, startLon = cLon;
     simTimer = setInterval(() => {
-      cLat += 0.0016; cLon += 0.0028;                    // NE drift ~40 km/h
-      if (cLon > -87.2){ cLat = 41.95; cLon = -88.05; }  // recycle cell
+      cLat += 0.0016; cLon += 0.0028;                          // NE drift ~40 km/h
+      if (cLon > startLon + 0.9){ cLat = startLat; cLon = startLon; }  // recycle cell
       const n = Math.random() < 0.35 ? 2 : 1;
       for (let i = 0; i < n; i++){
         addStrike(Date.now(),
@@ -256,7 +284,8 @@ simBtn.onclick = () => {
     connect();
   }
 };
-document.getElementById("homeBtn").onclick = () => map.setView(HOME, 10);
+document.getElementById("homeBtn").onclick = () =>
+  userLoc ? map.setView(userLoc, 10) : locateUser(true);
 
 /* ---- panel minimize / re-enlarge ---- */
 const panel = document.getElementById("panel"), minBtn = document.getElementById("minBtn");
@@ -321,12 +350,14 @@ function frame(){
       cx.lineWidth = Math.max(0.6, 2.2 * fade);
       cx.stroke();
 
-      // thunder-at-home bookkeeping
-      const dHome = distM(s.lat, s.lon, HOME[0], HOME[1]);
-      if (dHome <= AUDIBLE_M){
-        const eta = s.t + (dHome / SOUND) * 1000;
-        if (eta > now && eta < nextEta) nextEta = eta;
-        if (now - eta >= 0 && now - eta < 2500) boom = true;
+      // thunder-at-your-location bookkeeping (only when we know where the visitor is)
+      if (userLoc){
+        const dYou = distM(s.lat, s.lon, userLoc[0], userLoc[1]);
+        if (dYou <= AUDIBLE_M){
+          const eta = s.t + (dYou / SOUND) * 1000;
+          if (eta > now && eta < nextEta) nextEta = eta;
+          if (now - eta >= 0 && now - eta < 2500) boom = true;
+        }
       }
     }
 
@@ -360,7 +391,7 @@ function frame(){
     homeBox.classList.remove("boom");
     etaEl.textContent = nextEta < Infinity
       ? "in " + Math.ceil((nextEta - now) / 1000) + " s"
-      : (inView ? "out of earshot" : "quiet");
+      : (!userLoc ? "location off" : (inView ? "out of earshot" : "quiet"));
   }
   requestAnimationFrame(frame);
 }
