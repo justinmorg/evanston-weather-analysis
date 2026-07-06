@@ -9,10 +9,21 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
   :root{
+    color-scheme:dark;
     --bg:#0B1220; --panel:#131C2B; --panel2:#0F1726; --line:rgba(126,147,172,.16);
     --ink:#EAF2FB; --muted:#7E93AC; --faint:#54677E;
     --rain:#56A8FF; --hot:#FFAF5F; --cold:#7FD1E8; --moist:#59E0B8;
+    --panel-grad:#16233A; --shadow:0 12px 32px rgba(0,0,0,.45); --err:#FF8E8E;
     --radius:14px;
+  }
+  @media (prefers-color-scheme: light){
+    :root{
+      color-scheme:light;
+      --bg:#F4F6F9; --panel:#FFFFFF; --panel2:#EDF1F6; --line:rgba(28,48,68,.16);
+      --ink:#1B2733; --muted:#5B6B7D; --faint:#8A97A6;
+      --rain:#1D6FD1; --hot:#D97A1F; --cold:#0E86AD; --moist:#0F9B76;
+      --panel-grad:#E7EDF5; --shadow:0 12px 32px rgba(30,50,70,.18); --err:#C0392B;
+    }
   }
   *{box-sizing:border-box; margin:0; padding:0;}
   html,body{background:var(--bg); color:var(--ink); font-family:"IBM Plex Sans",system-ui,sans-serif;}
@@ -33,7 +44,7 @@
   .results{
     position:absolute; top:calc(100% + 6px); left:0; right:0; z-index:30;
     background:var(--panel); border:1px solid var(--line); border-radius:10px; overflow:hidden;
-    box-shadow:0 12px 32px rgba(0,0,0,.45); display:none;
+    box-shadow:var(--shadow); display:none;
   }
   .results button{display:block; width:100%; text-align:left; padding:10px 14px; font-size:14px;}
   .results button:hover, .results button:focus-visible{background:var(--panel2); outline:none;}
@@ -53,7 +64,7 @@
   /* ---------- current ---------- */
   .current{
     display:flex; flex-wrap:wrap; gap:26px; align-items:flex-end;
-    background:linear-gradient(160deg, #16233A 0%, var(--panel) 55%);
+    background:linear-gradient(160deg, var(--panel-grad) 0%, var(--panel) 55%);
     border:1px solid var(--line); border-radius:var(--radius); padding:26px 28px; margin-bottom:20px;
   }
   .loc-line{display:flex; align-items:center; gap:10px; width:100%;}
@@ -115,7 +126,7 @@
   .hint{color:var(--faint); font-size:12px; margin:-6px 0 14px 2px;}
 
   .status{color:var(--muted); padding:40px 10px; text-align:center; font-size:15px;}
-  .status.err{color:#FF8E8E;}
+  .status.err{color:var(--err);}
   footer{color:var(--faint); font-size:12px; margin-top:30px;}
   .hidden{display:none !important;}
 </style>
@@ -214,9 +225,19 @@ const fmt0 = n => (n==null||isNaN(n)) ? "–" : Math.round(n).toString();
 const CSS = getComputedStyle(document.documentElement);
 const C = name => CSS.getPropertyValue(name).trim();
 const FONT = { family:"IBM Plex Mono", size:11 };
-Chart.defaults.color = C("--muted");
-Chart.defaults.borderColor = C("--line");
-Chart.defaults.font = FONT;
+function applyChartTheme(){
+  Chart.defaults.color = C("--muted");
+  Chart.defaults.borderColor = C("--line");
+  Chart.defaults.font = FONT;
+}
+applyChartTheme();
+// Re-theme charts if the system light/dark preference changes mid-session
+window.matchMedia("(prefers-color-scheme: light)").addEventListener("change", () => {
+  applyChartTheme();
+  if (!wx) return;
+  if ($("hourView").classList.contains("hidden")) renderWeek();
+  else if (lastHourly != null) showHourly(lastHourly, false);
+});
 
 /* ---------- helpers ---------- */
 function stullWetBulbF(tF, rh){
@@ -380,7 +401,7 @@ function renderWeek(){
   mkChart("rainChart", {
     data:{ labels, datasets:[
       { type:"bar", label:"daily", data: daily.map(d=>d.rain), backgroundColor:C("--rain"), borderRadius:6, barPercentage:.5, yAxisID:"y" },
-      { type:"line", label:"cumulative", data: daily.map(d=>d.cum), borderColor:C("--ink"), borderDash:[5,4], pointRadius:3, pointBackgroundColor:C("--ink"), tension:.3, yAxisID:"y1" }
+      { type:"line", label:"cumulative", data: daily.map(d=>d.cum), borderColor:C("--ink"), borderDash:[5,4], pointRadius:3, pointBackgroundColor:C("--ink"), tension:0, yAxisID:"y1" }
     ]},
     options:{ maintainAspectRatio:false, onClick:clickToHourly,
       plugins:{ legend:{labels:{boxWidth:10}} },
@@ -394,8 +415,8 @@ function renderWeek(){
 
   mkChart("moistChart", {
     data:{ labels, datasets:[
-      { type:"line", label:"max wet bulb °F", data: daily.map(d=>d.wbMax), borderColor:C("--moist"), pointRadius:3, pointBackgroundColor:C("--moist"), tension:.3, yAxisID:"y" },
-      { type:"line", label:"mean dewpoint °F", data: daily.map(d=>d.dpMean), borderColor:C("--cold"), borderDash:[4,3], pointRadius:2, tension:.3, yAxisID:"y" },
+      { type:"line", label:"max wet bulb °F", data: daily.map(d=>d.wbMax), borderColor:C("--moist"), pointRadius:3, pointBackgroundColor:C("--moist"), tension:0, yAxisID:"y" },
+      { type:"line", label:"mean dewpoint °F", data: daily.map(d=>d.dpMean), borderColor:C("--cold"), borderDash:[4,3], pointRadius:2, tension:0, yAxisID:"y" },
       { type:"bar", label:"mean RH %", data: daily.map(d=>d.rhMean), backgroundColor:"rgba(126,147,172,.25)", borderRadius:6, barPercentage:.5, yAxisID:"y1" }
     ]},
     options:{ maintainAspectRatio:false, onClick:clickToHourly,
@@ -406,7 +427,9 @@ function renderWeek(){
 }
 
 /* ---------- rendering: hourly drill-down ---------- */
-function showHourly(i){
+let lastHourly = null;
+function showHourly(i, scroll = true){
+  lastHourly = i;
   const d = daily[i];
   const h = wx.hourly;
   const labels = d.idx.map(j => h.time[j].slice(11,16));
@@ -416,9 +439,9 @@ function showHourly(i){
   mkChart("hTempChart", {
     type:"line",
     data:{ labels, datasets:[
-      { label:"temp", data:pick(h.temperature_2m), borderColor:C("--hot"), pointRadius:0, tension:.35 },
-      { label:"wet bulb", data:pick(h.wet_bulb_temperature_2m), borderColor:C("--moist"), pointRadius:0, tension:.35 },
-      { label:"dewpoint", data:pick(h.dew_point_2m), borderColor:C("--cold"), borderDash:[4,3], pointRadius:0, tension:.35 }
+      { label:"temp", data:pick(h.temperature_2m), borderColor:C("--hot"), pointRadius:0, tension:0 },
+      { label:"wet bulb", data:pick(h.wet_bulb_temperature_2m), borderColor:C("--moist"), pointRadius:0, tension:0 },
+      { label:"dewpoint", data:pick(h.dew_point_2m), borderColor:C("--cold"), borderDash:[4,3], pointRadius:0, tension:0 }
     ]},
     options:{ maintainAspectRatio:false, interaction:{mode:"index", intersect:false},
       plugins:{ legend:{labels:{boxWidth:10}} }, scales:{ y:{ grace:"10%", title:{display:true,text:"°F"} } } }
@@ -426,7 +449,7 @@ function showHourly(i){
   mkChart("hHumChart", {
     type:"line",
     data:{ labels, datasets:[{ label:"RH", data:pick(h.relative_humidity_2m), borderColor:C("--muted"),
-      backgroundColor:"rgba(126,147,172,.15)", fill:true, pointRadius:0, tension:.35 }]},
+      backgroundColor:"rgba(126,147,172,.15)", fill:true, pointRadius:0, tension:0 }]},
     options:{ maintainAspectRatio:false, plugins:{legend:{display:false}},
       interaction:{mode:"index", intersect:false}, scales:{ y:{min:0, max:100, title:{display:true,text:"%"}} } }
   });
@@ -439,7 +462,7 @@ function showHourly(i){
 
   $("weekView").classList.add("hidden");
   $("hourView").classList.remove("hidden");
-  window.scrollTo({top:0, behavior:"smooth"});
+  if (scroll) window.scrollTo({top:0, behavior:"smooth"});
 }
 function showWeek(){
   $("hourView").classList.add("hidden");
@@ -501,12 +524,25 @@ async function geocode(q){
   } catch(e){ /* search quietly fails; weather view untouched */ }
 }
 
+async function myLocationName(lat, lon){
+  // Reverse geocode to a friendly name; fall back to coordinates on any failure.
+  try {
+    const r = await fetch("https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=" + lat +
+      "&longitude=" + lon + "&localityLanguage=en");
+    if (!r.ok) throw new Error();
+    const g = await r.json();
+    const place = [g.city || g.locality, g.principalSubdivision].filter(Boolean).join(", ");
+    if (place) return "My location (" + place + ")";
+  } catch(e){ /* fall through */ }
+  return "My location (" + lat.toFixed(2) + ", " + lon.toFixed(2) + ")";
+}
+
 $("geoBtn").onclick = () => {
   if (!navigator.geolocation){ return; }
   showStatus("Locating…");
   navigator.geolocation.getCurrentPosition(async pos => {
     const {latitude:lat, longitude:lon} = pos.coords;
-    setLocation({ name:"My location (" + lat.toFixed(2) + ", " + lon.toFixed(2) + ")", lat, lon });
+    setLocation({ name: await myLocationName(lat, lon), lat, lon });
   }, () => loadWeather(), { timeout: 8000 });
 };
 
@@ -514,8 +550,10 @@ $("geoBtn").onclick = () => {
 renderFavs();
 if (!store.get("wx.loc") && navigator.geolocation){
   navigator.geolocation.getCurrentPosition(
-    pos => setLocation({ name:"My location (" + pos.coords.latitude.toFixed(2) + ", " + pos.coords.longitude.toFixed(2) + ")",
-                         lat:pos.coords.latitude, lon:pos.coords.longitude }),
+    async pos => {
+      const {latitude:lat, longitude:lon} = pos.coords;
+      setLocation({ name: await myLocationName(lat, lon), lat, lon });
+    },
     () => loadWeather(),
     { timeout: 6000 }
   );
